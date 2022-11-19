@@ -871,6 +871,7 @@ impl CPU {
 
 // Test CPU methods
 #[cfg(test)]
+// TODO: Add tests for all CPU methods
 mod test {
     use super::*;
 

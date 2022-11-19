@@ -1,6 +1,63 @@
-mod memory;
-use memory::Memory;
-// cpu emulating the 2A03 chip
+use crate::opcodes;
+use std::collections::HashMap;
+
+bitflags! {
+    /// Status Register (P)
+    /// 
+    ///7 6 5 4 3 2 1 0
+    ///N V _ B D I Z C
+    ///| |   | | | | |
+    ///| |   |   | | | +--Carry
+    ///| |   |   | | +----Zero
+    ///| |   |   | +------Interrupt Disable
+    ///| |   |   +--------Decimal
+    ///| |    +------------No CPU effect, see: the B flag
+    ///| +----------------Overflow
+    ///+------------------Negative
+    ///
+    pub struct CpuFlags: u8 {
+        const CARRY = 0b0000_0001;
+        const ZERO = 0b0000_0010;
+        const INTERRUPT_DISABLE = 0b0000_0100;
+        const DECIMAL = 0b0000_1000;
+        const BREAK = 0b0001_0000;
+        const UNUSED = 0b0010_0000;
+        const OVERFLOW = 0b0100_0000;
+        const NEGATIVE = 0b1000_0000;
+    }
+}
+
+
+//Memory Trait
+trait Memory{
+    fn m_read(&self, addr: u16) -> u8;
+    
+    fn m_write(&mut self, addr: u16, data: u8);
+
+    fn m_read_u16(&self, addr: u16) -> u16 {
+        let low: u16 = self.m_read(addr) as u16;
+        let high: u16 = self.m_read(addr + 1) as u16;
+        (high << 8) | (low as u16)
+    }
+
+    fn m_write_u16(&mut self, addr: u16, data: u16) {
+        let low = (data & 0xFF) as u8;
+        let high = ((data >> 8) >> 8) as u8;
+        self.m_write(addr, low);
+        self.m_write(addr + 1, high);
+    }
+}
+
+// Implementing the Memory Trait for the CPU
+impl Memory for CPU{
+    fn m_read(&self, addr: u16) -> u8 {
+        self.memory[addr as usize]
+    }
+    fn m_write(&mut self, addr: u16, data: u8) {
+        self.memory[addr as usize] = data;
+    }
+}
+// CPU emulating the 2A03 chip
 pub struct CPU{
     pub register_a: u8,
     pub register_x: u8,
@@ -25,14 +82,6 @@ pub enum AddressingMode{
     NoneAddressing,
 }
 
-impl Memory for CPU{
-    fn m_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
-    }
-    fn m_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data;
-    }
-}
 
 impl CPU {
     pub fn new() -> CPU {

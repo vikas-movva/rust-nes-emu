@@ -103,7 +103,7 @@ impl CPU {
         }
     }
 
-    fn get_op_addr(&self, mode: AddressingMode) -> u16 {
+    fn get_op_addr(&self, mode: &AddressingMode) -> u16 {
 
         match mode{
             // counter address
@@ -311,7 +311,7 @@ impl CPU {
         }
 
     // compare function
-    fn compare(&mut self, mode: AddressingMode, value: u8) {
+    fn compare(&mut self, mode: &AddressingMode, value: u8) {
         // get the address
         let addr = self.get_op_addr(mode);
 
@@ -328,7 +328,7 @@ impl CPU {
      // Opcodes -----------------------------------------------
 
     // ADC - Add with Carry
-    fn adc(&mut self, mode: AddressingMode){
+    fn adc(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -338,7 +338,7 @@ impl CPU {
     }
 
     // AND - Logical AND
-    fn and(&mut self, mode: AddressingMode){
+    fn and(&mut self, mode: &AddressingMode){
         
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -348,7 +348,7 @@ impl CPU {
     }
 
     // ASL - Arithmetic Shift Left
-    fn asl(&mut self, mode: AddressingMode){
+    fn asl(&mut self, mode: &AddressingMode){
         match mode {
             AddressingMode::Accumulator => {
                 // set carry flag
@@ -390,7 +390,7 @@ impl CPU {
     }
 
     // BIT - Bit Test
-    fn bit(&mut self, mode: AddressingMode){
+    fn bit(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -469,25 +469,25 @@ impl CPU {
     }
 
     // CMP - Compare
-    fn cmp(&mut self, mode: AddressingMode){
+    fn cmp(&mut self, mode: &AddressingMode){
         // compare the data with the register a
         self.compare(mode, self.register_a);
     }
 
     // CPX - Compare X Register
-    fn cpx(&mut self, mode: AddressingMode){
+    fn cpx(&mut self, mode: &AddressingMode){
         // compare the data with the register x
         self.compare(mode, self.register_x);
     }
 
     // CPY - Compare Y Register
-    fn cpy(&mut self, mode: AddressingMode){
+    fn cpy(&mut self, mode: &AddressingMode){
         // compare the data with the register y
         self.compare(mode, self.register_y);
     }
 
     // DEC - Decrement Memory
-    fn dec(&mut self, mode: AddressingMode){
+    fn dec(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -517,7 +517,7 @@ impl CPU {
     }
 
     // EOR - Exclusive OR
-    fn eor(&mut self, mode: AddressingMode){
+    fn eor(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -527,7 +527,7 @@ impl CPU {
     }
 
     // INC - Increment Memory
-    fn inc(&mut self, mode: AddressingMode){
+    fn inc(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -557,7 +557,7 @@ impl CPU {
     }
 
     // JMP - Jump
-    fn jmp(&mut self, mode: AddressingMode){
+    fn jmp(&mut self, mode: &AddressingMode){
         match mode {
             AddressingMode::Absolute => {
                 // get the address of the operand
@@ -587,7 +587,7 @@ impl CPU {
     }
     
     // LDA - Load Accumulator
-    fn lda(&mut self, mode: AddressingMode){
+    fn lda(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -597,7 +597,7 @@ impl CPU {
     }
 
     // LDX - Load X Register
-    fn ldx(&mut self, mode: AddressingMode){
+    fn ldx(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -608,7 +608,7 @@ impl CPU {
     }
 
     // LDY - Load Y Register
-    fn ldy(&mut self, mode: AddressingMode){
+    fn ldy(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -619,7 +619,7 @@ impl CPU {
     }
 
     // LSR - Logical Shift Right
-    fn lsr(&mut self, mode: AddressingMode){
+    fn lsr(&mut self, mode: &AddressingMode){
         match mode {
             AddressingMode::Accumulator => {
                 // shift the register a
@@ -649,7 +649,7 @@ impl CPU {
     }
 
     // ORA - Logical Inclusive OR
-    fn ora(&mut self, mode: AddressingMode){
+    fn ora(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -691,7 +691,7 @@ impl CPU {
     }
 
     // ROL - Rotate Left
-    fn rol(&mut self, mode: AddressingMode){
+    fn rol(&mut self, mode: &AddressingMode){
         match mode {
             AddressingMode::Accumulator => {
                 // rotate the register a
@@ -718,7 +718,7 @@ impl CPU {
     }
 
     // ROR - Rotate Right
-    fn ror(&mut self, mode: AddressingMode){
+    fn ror(&mut self, mode: &AddressingMode){
         match mode {
             AddressingMode::Accumulator => {
                 // rotate the register a
@@ -762,7 +762,7 @@ impl CPU {
     }
 
     // SBC - Subtract with Carry
-    fn sbc(&mut self, mode: AddressingMode){
+    fn sbc(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);
@@ -788,21 +788,21 @@ impl CPU {
     }
 
     // STA - Store Accumulator
-    fn sta(&mut self, mode: AddressingMode){
+    fn sta(&mut self, mode: &AddressingMode){
         // get the address of the operand and write the data
         let addr = self.get_op_addr(mode);
         self.m_write(addr, self.register_a);
     }
 
     // STX - Store X Register
-    fn stx(&mut self, mode: AddressingMode){
+    fn stx(&mut self, mode: &AddressingMode){
         // get the address of the operand and write the data
         let addr = self.get_op_addr(mode);
         self.m_write(addr, self.register_x);
     }
 
     // STY - Store Y Register
-    fn sty(&mut self, mode: AddressingMode){
+    fn sty(&mut self, mode: &AddressingMode){
         // get the address of the operand and write the data
         let addr = self.get_op_addr(mode);
         self.m_write(addr, self.register_y);
@@ -852,7 +852,7 @@ impl CPU {
     // Unofficial Instructions
 
     // ANC - AND with Carry
-    fn anc(&mut self, mode: AddressingMode){
+    fn anc(&mut self, mode: &AddressingMode){
         // get the address of the operand and read the data
         let addr = self.get_op_addr(mode);
         let data = self.m_read(addr);

@@ -1,19 +1,19 @@
+pub mod bus;
+pub mod rom;
 pub mod cpu;
 pub mod opcodes;
-pub mod bus;
-pub mod memory;
-pub mod rom;
 
+use bus::Bus;
+use rom::Rom;
+use cpu::Mem;
 use cpu::CPU;
-use memory::Memory;
-use bus::BUS;
-use rom::ROM;
 use rand::Rng;
+
 use sdl2::event::Event;
-use sdl2::EventPump;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
+use sdl2::EventPump;
 use std::time::Duration;
 
 #[macro_use]
@@ -22,7 +22,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate bitflags;
 
-fn color(byte: u8) -> Color{
+fn color(byte: u8) -> Color {
     match byte {
         0 => sdl2::pixels::Color::BLACK,
         1 => sdl2::pixels::Color::WHITE,
@@ -33,20 +33,19 @@ fn color(byte: u8) -> Color{
         6 | 13 => sdl2::pixels::Color::MAGENTA,
         7 | 14 => sdl2::pixels::Color::YELLOW,
         _ => sdl2::pixels::Color::CYAN,
-        
     }
 }
 
-fn read_screen_state(cpu: &CPU, frame: &mut [u8; 32*32*3]) -> bool{
+fn read_screen_state(cpu: &CPU, frame: &mut [u8; 32 * 3 * 32]) -> bool {
     let mut frame_idx = 0;
     let mut update = false;
-    for i in 0x0200..0x600{
-        let color_idx = cpu.m_read(i as u16);
-        let (r, g, b) = color(color_idx).rgb();
-        if frame[frame_idx] != r || frame[frame_idx+1] != g || frame[frame_idx+2] != b{
-            frame[frame_idx] = r;
-            frame[frame_idx+1] = g;
-            frame[frame_idx+2] = b;
+    for i in 0x0200..0x600 {
+        let color_idx = cpu.mem_read(i as u16);
+        let (b1, b2, b3) = color(color_idx).rgb();
+        if frame[frame_idx] != b1 || frame[frame_idx + 1] != b2 || frame[frame_idx + 2] != b3 {
+            frame[frame_idx] = b1;
+            frame[frame_idx + 1] = b2;
+            frame[frame_idx + 2] = b3;
             update = true;
         }
         frame_idx += 3;
@@ -54,7 +53,7 @@ fn read_screen_state(cpu: &CPU, frame: &mut [u8; 32*32*3]) -> bool{
     update
 }
 
-fn handle_input(cpu: &mut CPU, event_pump: &mut EventPump){
+fn handle_user_input(cpu: &mut CPU, event_pump: &mut EventPump) {
     for event in event_pump.poll_iter() {
         match event {
             Event::Quit { .. }
@@ -66,25 +65,25 @@ fn handle_input(cpu: &mut CPU, event_pump: &mut EventPump){
                 keycode: Some(Keycode::W),
                 ..
             } => {
-                cpu.m_write(0xff, 0x77);
+                cpu.mem_write(0xff, 0x77);
             }
             Event::KeyDown {
                 keycode: Some(Keycode::S),
                 ..
             } => {
-                cpu.m_write(0xff, 0x73);
+                cpu.mem_write(0xff, 0x73);
             }
             Event::KeyDown {
                 keycode: Some(Keycode::A),
                 ..
             } => {
-                cpu.m_write(0xff, 0x61);
+                cpu.mem_write(0xff, 0x61);
             }
             Event::KeyDown {
                 keycode: Some(Keycode::D),
                 ..
             } => {
-                cpu.m_write(0xff, 0x64);
+                cpu.mem_write(0xff, 0x64);
             }
             _ => { /* do nothing */ }
         }
@@ -92,6 +91,7 @@ fn handle_input(cpu: &mut CPU, event_pump: &mut EventPump){
 }
 
 fn main() {
+    // init sdl2
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
@@ -111,9 +111,9 @@ fn main() {
 
     //load the game
     let bytes: Vec<u8> = std::fs::read("snake.nes").unwrap();
-    let rom = ROM::new(&bytes).unwrap();
+    let rom = Rom::new(&bytes).unwrap();
 
-    let bus = BUS::new(rom);
+    let bus = Bus::new(rom);
     let mut cpu = CPU::new(bus);
     cpu.reset();
 
@@ -121,10 +121,10 @@ fn main() {
     let mut rng = rand::thread_rng();
 
     // run the game cycle
-    cpu.run_callback(move |cpu| {
-        handle_input(cpu, &mut event_pump);
+    cpu.run_with_callback(move |cpu| {
+        handle_user_input(cpu, &mut event_pump);
 
-        cpu.m_write(0xfe, rng.gen_range(1, 16));
+        cpu.mem_write(0xfe, rng.gen_range(1, 16));
 
         if read_screen_state(cpu, &mut screen_state) {
             texture.update(None, &screen_state, 32 * 3).unwrap();
@@ -134,7 +134,6 @@ fn main() {
             canvas.present();
         }
 
-        ::std::thread::sleep(Duration::new(0, 70_000));
+        ::std::thread::sleep(std::time::Duration::new(0, 70_000));
     });
 }
-

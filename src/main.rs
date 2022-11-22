@@ -14,7 +14,6 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::EventPump;
-use std::time::Duration;
 
 #[macro_use]
 extern crate lazy_static;
@@ -64,25 +63,34 @@ fn handle_user_input(cpu: &mut CPU, event_pump: &mut EventPump) {
             Event::KeyDown {
                 keycode: Some(Keycode::W),
                 ..
-            } => {
+            }| Event::KeyDown{
+                keycode: Some(Keycode::Up),
+                ..}
+             => {
                 cpu.mem_write(0xff, 0x77);
             }
             Event::KeyDown {
                 keycode: Some(Keycode::S),
                 ..
-            } => {
+            } | Event::KeyDown{
+                keycode: Some(Keycode::Down),
+                ..}=> {
                 cpu.mem_write(0xff, 0x73);
             }
             Event::KeyDown {
                 keycode: Some(Keycode::A),
                 ..
-            } => {
+            } | Event::KeyDown{
+                keycode: Some(Keycode::Left),
+                ..}=> {
                 cpu.mem_write(0xff, 0x61);
             }
             Event::KeyDown {
                 keycode: Some(Keycode::D),
                 ..
-            } => {
+            } | Event::KeyDown{
+                keycode: Some(Keycode::Right),
+                ..}=> {
                 cpu.mem_write(0xff, 0x64);
             }
             _ => { /* do nothing */ }

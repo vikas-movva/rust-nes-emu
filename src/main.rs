@@ -1,8 +1,11 @@
 pub mod cpu;
 pub mod opcodes;
+pub mod bus;
+pub mod memory;
+pub mod rom;
 
 use cpu::CPU;
-use cpu::Memory;
+use memory::Memory;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::EventPump;

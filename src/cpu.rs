@@ -84,7 +84,7 @@ pub enum AddressingMode{
 
 
 impl CPU {
-    pub fn new() -> CPU {
+    pub fn new(bus: BUS) -> CPU {
         CPU {
             register_a: 0,
             register_x: 0,
@@ -92,7 +92,7 @@ impl CPU {
             stack_pointer: STACK_RESET,  
             program_counter: 0,
             status_register: CpuFlags::from_bits_truncate(0b100100),
-            bus: BUS::new(),
+            bus: bus,
         }
     }
 
@@ -167,8 +167,10 @@ impl CPU {
     }
     
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x6000..(0x6000 + program.len())].clone_from_slice(&program[..]);
-        self.m_write_u16(0xFFFC, 0x6000);
+        for i in 0..(program.len() as u16) {
+            self.m_write(0x8600 + i, program[i as usize]);
+        }
+        self.m_write_u16(0xFFFC, 0x8600);
     }
 
     pub fn run(&mut self) {
@@ -1054,13 +1056,14 @@ impl CPU {
 
 // Test CPU methods
 #[cfg(test)]
-// TODO: Add tests for all CPU methods
 mod test {
-    use super::*;
+use super::*;
+use crate::rom::test;
 
     #[test]
     fn test_0xa9_lda_immidiate_load_data() {
-        let mut cpu = CPU::new();
+        let bus = BUS::new(test::test_rom());
+        let mut cpu = CPU::new(bus);
         cpu.load_and_run(vec![0xa9, 0x05, 0x00]);
         assert_eq!(cpu.register_a, 5);
         assert!(cpu.status_register.bits() & 0b0000_0010 == 0b00);
@@ -1069,7 +1072,8 @@ mod test {
 
     #[test]
     fn test_0xaa_tax_move_a_to_x() {
-        let mut cpu = CPU::new();
+        let bus = BUS::new(test::test_rom());
+        let mut cpu = CPU::new(bus);
         cpu.register_a = 10;
         cpu.load_and_run(vec![0xaa, 0x00]);
 
@@ -1078,7 +1082,8 @@ mod test {
 
     #[test]
     fn test_5_ops_working_together() {
-        let mut cpu = CPU::new();
+        let bus = BUS::new(test::test_rom());
+        let mut cpu = CPU::new(bus);
         cpu.load_and_run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
 
         assert_eq!(cpu.register_x, 0xc1)
@@ -1086,7 +1091,8 @@ mod test {
 
     #[test]
     fn test_inx_overflow() {
-        let mut cpu = CPU::new();
+        let bus = BUS::new(test::test_rom());
+        let mut cpu = CPU::new(bus);
         cpu.register_x = 0xff;
         cpu.load_and_run(vec![0xe8, 0xe8, 0x00]);
 
@@ -1095,11 +1101,12 @@ mod test {
 
     #[test]
     fn test_lda_from_memory() {
-        let mut cpu = CPU::new();
+        let bus = BUS::new(test::test_rom());
+        let mut cpu = CPU::new(bus);
         cpu.m_write(0x10, 0x55);
 
         cpu.load_and_run(vec![0xa5, 0x10, 0x00]);
-
+        
         assert_eq!(cpu.register_a, 0x55);
     }
-}
+}   

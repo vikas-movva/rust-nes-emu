@@ -1,4 +1,4 @@
-use crate::bus::Bus;
+use crate::bus::BUS;
 use crate::opcodes;
 use std::collections::HashMap;
 
@@ -19,11 +19,11 @@ bitflags! {
         const CARRY             = 0b00000001;
         const ZERO              = 0b00000010;
         const INTERRUPT_DISABLE = 0b00000100;
-        const DECIMAL_MODE      = 0b00001000;
+        const DECIMAL           = 0b00001000;
         const BREAK             = 0b00010000;
         const BREAK2            = 0b00100000;
         const OVERFLOW          = 0b01000000;
-        const NEGATIV           = 0b10000000;
+        const NEGATIVE          = 0b10000000;
     }
 }
 
@@ -34,10 +34,10 @@ pub struct CPU {
     pub register_a: u8,
     pub register_x: u8,
     pub register_y: u8,
-    pub status: CpuFlags,
+    pub status_register: CpuFlags,
     pub program_counter: u16,
     pub stack_pointer: u8,
-    pub bus: Bus,
+    pub bus: BUS,
 }
 
 #[derive(Debug)]
@@ -92,14 +92,14 @@ impl Mem for CPU {
 }
 
 impl CPU {
-    pub fn new(bus: Bus) -> Self {
+    pub fn new(bus: BUS) -> Self {
         CPU {
             register_a: 0,
             register_x: 0,
             register_y: 0,
             stack_pointer: STACK_RESET,
             program_counter: 0,
-            status: CpuFlags::from_bits_truncate(0b100100),
+            status_register: CpuFlags::from_bits_truncate(0b100100),
             bus: bus,
         }
     }
@@ -213,23 +213,23 @@ impl CPU {
 
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         if result == 0 {
-            self.status.insert(CpuFlags::ZERO);
+            self.status_register.insert(CpuFlags::ZERO);
         } else {
-            self.status.remove(CpuFlags::ZERO);
+            self.status_register.remove(CpuFlags::ZERO);
         }
 
         if result >> 7 == 1 {
-            self.status.insert(CpuFlags::NEGATIV);
+            self.status_register.insert(CpuFlags::NEGATIVE);
         } else {
-            self.status.remove(CpuFlags::NEGATIV);
+            self.status_register.remove(CpuFlags::NEGATIVE);
         }
     }
 
     fn update_negative_flags(&mut self, result: u8) {
         if result >> 7 == 1 {
-            self.status.insert(CpuFlags::NEGATIV)
+            self.status_register.insert(CpuFlags::NEGATIVE)
         } else {
-            self.status.remove(CpuFlags::NEGATIV)
+            self.status_register.remove(CpuFlags::NEGATIVE)
         }
     }
 
@@ -261,18 +261,18 @@ impl CPU {
         self.register_x = 0;
         self.register_y = 0;
         self.stack_pointer = STACK_RESET;
-        self.status = CpuFlags::from_bits_truncate(0b100100);
+        self.status_register = CpuFlags::from_bits_truncate(0b100100);
         // self.memory = [0; 0xFFFF];
 
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
     fn set_carry_flag(&mut self) {
-        self.status.insert(CpuFlags::CARRY)
+        self.status_register.insert(CpuFlags::CARRY)
     }
 
     fn clear_carry_flag(&mut self) {
-        self.status.remove(CpuFlags::CARRY)
+        self.status_register.remove(CpuFlags::CARRY)
     }
 
     /// note: ignoring decimal mode
@@ -280,7 +280,7 @@ impl CPU {
     fn add_to_register_a(&mut self, data: u8) {
         let sum = self.register_a as u16
             + data as u16
-            + (if self.status.contains(CpuFlags::CARRY) {
+            + (if self.status_register.contains(CpuFlags::CARRY) {
                 1
             } else {
                 0
@@ -289,17 +289,17 @@ impl CPU {
         let carry = sum > 0xff;
 
         if carry {
-            self.status.insert(CpuFlags::CARRY);
+            self.status_register.insert(CpuFlags::CARRY);
         } else {
-            self.status.remove(CpuFlags::CARRY);
+            self.status_register.remove(CpuFlags::CARRY);
         }
 
         let result = sum as u8;
 
         if (data ^ result) & (result ^ self.register_a) & 0x80 != 0 {
-            self.status.insert(CpuFlags::OVERFLOW);
+            self.status_register.insert(CpuFlags::OVERFLOW);
         } else {
-            self.status.remove(CpuFlags::OVERFLOW)
+            self.status_register.remove(CpuFlags::OVERFLOW)
         }
 
         self.set_register_a(result);
@@ -394,7 +394,7 @@ impl CPU {
     fn rol(&mut self, mode: &AddressingMode) -> u8 {
         let addr = self.get_operand_address(mode);
         let mut data = self.mem_read(addr);
-        let old_carry = self.status.contains(CpuFlags::CARRY);
+        let old_carry = self.status_register.contains(CpuFlags::CARRY);
 
         if data >> 7 == 1 {
             self.set_carry_flag();
@@ -412,7 +412,7 @@ impl CPU {
 
     fn rol_accumulator(&mut self) {
         let mut data = self.register_a;
-        let old_carry = self.status.contains(CpuFlags::CARRY);
+        let old_carry = self.status_register.contains(CpuFlags::CARRY);
 
         if data >> 7 == 1 {
             self.set_carry_flag();
@@ -429,7 +429,7 @@ impl CPU {
     fn ror(&mut self, mode: &AddressingMode) -> u8 {
         let addr = self.get_operand_address(mode);
         let mut data = self.mem_read(addr);
-        let old_carry = self.status.contains(CpuFlags::CARRY);
+        let old_carry = self.status_register.contains(CpuFlags::CARRY);
 
         if data & 1 == 1 {
             self.set_carry_flag();
@@ -447,7 +447,7 @@ impl CPU {
 
     fn ror_accumulator(&mut self) {
         let mut data = self.register_a;
-        let old_carry = self.status.contains(CpuFlags::CARRY);
+        let old_carry = self.status_register.contains(CpuFlags::CARRY);
 
         if data & 1 == 1 {
             self.set_carry_flag();
@@ -495,14 +495,14 @@ impl CPU {
     }
 
     fn plp(&mut self) {
-        self.status.bits = self.stack_pop();
-        self.status.remove(CpuFlags::BREAK);
-        self.status.insert(CpuFlags::BREAK2);
+        self.status_register.bits = self.stack_pop();
+        self.status_register.remove(CpuFlags::BREAK);
+        self.status_register.insert(CpuFlags::BREAK2);
     }
 
     fn php(&mut self) {
         //http://wiki.nesdev.com/w/index.php/CPU_status_flag_behavior
-        let mut flags = self.status.clone();
+        let mut flags = self.status_register.clone();
         flags.insert(CpuFlags::BREAK);
         flags.insert(CpuFlags::BREAK2);
         self.stack_push(flags.bits());
@@ -513,22 +513,22 @@ impl CPU {
         let data = self.mem_read(addr);
         let and = self.register_a & data;
         if and == 0 {
-            self.status.insert(CpuFlags::ZERO);
+            self.status_register.insert(CpuFlags::ZERO);
         } else {
-            self.status.remove(CpuFlags::ZERO);
+            self.status_register.remove(CpuFlags::ZERO);
         }
 
-        self.status.set(CpuFlags::NEGATIV, data & 0b10000000 > 0);
-        self.status.set(CpuFlags::OVERFLOW, data & 0b01000000 > 0);
+        self.status_register.set(CpuFlags::NEGATIVE, data & 0b10000000 > 0);
+        self.status_register.set(CpuFlags::OVERFLOW, data & 0b01000000 > 0);
     }
 
     fn compare(&mut self, mode: &AddressingMode, compare_with: u8) {
         let addr = self.get_operand_address(mode);
         let data = self.mem_read(addr);
         if data <= compare_with {
-            self.status.insert(CpuFlags::CARRY);
+            self.status_register.insert(CpuFlags::CARRY);
         } else {
-            self.status.remove(CpuFlags::CARRY);
+            self.status_register.remove(CpuFlags::CARRY);
         }
 
         self.update_zero_and_negative_flags(compare_with.wrapping_sub(data));
@@ -572,19 +572,19 @@ impl CPU {
                 0xe8 => self.inx(),
                 0x00 => return,
 
-                /* CLD */ 0xd8 => self.status.remove(CpuFlags::DECIMAL_MODE),
+                /* CLD */ 0xd8 => self.status_register.remove(CpuFlags::DECIMAL),
 
-                /* CLI */ 0x58 => self.status.remove(CpuFlags::INTERRUPT_DISABLE),
+                /* CLI */ 0x58 => self.status_register.remove(CpuFlags::INTERRUPT_DISABLE),
 
-                /* CLV */ 0xb8 => self.status.remove(CpuFlags::OVERFLOW),
+                /* CLV */ 0xb8 => self.status_register.remove(CpuFlags::OVERFLOW),
 
                 /* CLC */ 0x18 => self.clear_carry_flag(),
 
                 /* SEC */ 0x38 => self.set_carry_flag(),
 
-                /* SEI */ 0x78 => self.status.insert(CpuFlags::INTERRUPT_DISABLE),
+                /* SEI */ 0x78 => self.status_register.insert(CpuFlags::INTERRUPT_DISABLE),
 
-                /* SED */ 0xf8 => self.status.insert(CpuFlags::DECIMAL_MODE),
+                /* SED */ 0xf8 => self.status_register.insert(CpuFlags::DECIMAL),
 
                 /* PHA */ 0x48 => self.stack_push(self.register_a),
 
@@ -732,51 +732,51 @@ impl CPU {
 
                 /* RTI */
                 0x40 => {
-                    self.status.bits = self.stack_pop();
-                    self.status.remove(CpuFlags::BREAK);
-                    self.status.insert(CpuFlags::BREAK2);
+                    self.status_register.bits = self.stack_pop();
+                    self.status_register.remove(CpuFlags::BREAK);
+                    self.status_register.insert(CpuFlags::BREAK2);
 
                     self.program_counter = self.stack_pop_u16();
                 }
 
                 /* BNE */
                 0xd0 => {
-                    self.branch(!self.status.contains(CpuFlags::ZERO));
+                    self.branch(!self.status_register.contains(CpuFlags::ZERO));
                 }
 
                 /* BVS */
                 0x70 => {
-                    self.branch(self.status.contains(CpuFlags::OVERFLOW));
+                    self.branch(self.status_register.contains(CpuFlags::OVERFLOW));
                 }
 
                 /* BVC */
                 0x50 => {
-                    self.branch(!self.status.contains(CpuFlags::OVERFLOW));
+                    self.branch(!self.status_register.contains(CpuFlags::OVERFLOW));
                 }
 
                 /* BPL */
                 0x10 => {
-                    self.branch(!self.status.contains(CpuFlags::NEGATIV));
+                    self.branch(!self.status_register.contains(CpuFlags::NEGATIVE));
                 }
 
                 /* BMI */
                 0x30 => {
-                    self.branch(self.status.contains(CpuFlags::NEGATIV));
+                    self.branch(self.status_register.contains(CpuFlags::NEGATIVE));
                 }
 
                 /* BEQ */
                 0xf0 => {
-                    self.branch(self.status.contains(CpuFlags::ZERO));
+                    self.branch(self.status_register.contains(CpuFlags::ZERO));
                 }
 
                 /* BCS */
                 0xb0 => {
-                    self.branch(self.status.contains(CpuFlags::CARRY));
+                    self.branch(self.status_register.contains(CpuFlags::CARRY));
                 }
 
                 /* BCC */
                 0x90 => {
-                    self.branch(!self.status.contains(CpuFlags::CARRY));
+                    self.branch(!self.status_register.contains(CpuFlags::CARRY));
                 }
 
                 /* BIT */
@@ -864,17 +864,17 @@ mod test {
 
     #[test]
     fn test_0xa9_lda_immidiate_load_data() {
-        let bus = Bus::new(test::test_rom());
+        let bus = BUS::new(test::test_rom());
         let mut cpu = CPU::new(bus);
         cpu.load_and_run(vec![0xa9, 0x05, 0x00]);
         assert_eq!(cpu.register_a, 5);
-        assert!(cpu.status.bits() & 0b0000_0010 == 0b00);
-        assert!(cpu.status.bits() & 0b1000_0000 == 0);
+        assert!(cpu.status_register.bits() & 0b0000_0010 == 0b00);
+        assert!(cpu.status_register.bits() & 0b1000_0000 == 0);
     }
 
     #[test]
     fn test_0xaa_tax_move_a_to_x() {
-        let bus = Bus::new(test::test_rom());
+        let bus = BUS::new(test::test_rom());
         let mut cpu = CPU::new(bus);
         cpu.register_a = 10;
         cpu.load_and_run(vec![0xaa, 0x00]);
@@ -884,7 +884,7 @@ mod test {
 
     #[test]
     fn test_5_ops_working_together() {
-        let bus = Bus::new(test::test_rom());
+        let bus = BUS::new(test::test_rom());
         let mut cpu = CPU::new(bus);
         cpu.load_and_run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
 
@@ -893,7 +893,7 @@ mod test {
 
     #[test]
     fn test_inx_overflow() {
-        let bus = Bus::new(test::test_rom());
+        let bus = BUS::new(test::test_rom());
         let mut cpu = CPU::new(bus);
         cpu.register_x = 0xff;
         cpu.load_and_run(vec![0xe8, 0xe8, 0x00]);
@@ -903,7 +903,7 @@ mod test {
 
     #[test]
     fn test_lda_from_memory() {
-        let bus = Bus::new(test::test_rom());
+        let bus = BUS::new(test::test_rom());
         let mut cpu = CPU::new(bus);
         cpu.mem_write(0x10, 0x55);
 

@@ -3,8 +3,8 @@ pub mod rom;
 pub mod cpu;
 pub mod opcodes;
 
-use bus::Bus;
-use rom::Rom;
+use bus::BUS;
+use rom::ROM;
 use cpu::Mem;
 use cpu::CPU;
 use rand::Rng;
@@ -119,9 +119,9 @@ fn main() {
 
     //load the game
     let bytes: Vec<u8> = std::fs::read("snake.nes").unwrap();
-    let rom = Rom::new(&bytes).unwrap();
+    let rom = ROM::new(&bytes).unwrap();
 
-    let bus = Bus::new(rom);
+    let bus = BUS::new(rom);
     let mut cpu = CPU::new(bus);
     cpu.reset();
 

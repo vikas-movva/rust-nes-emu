@@ -1,4 +1,4 @@
-use crate::rom::Rom;
+use crate::rom::ROM;
 use crate::cpu::Mem;
 
 //  _______________ $10000  _______________
@@ -33,16 +33,16 @@ const RAM_MIRRORS_END: u16 = 0x1FFF;
 const PPU_REGISTERS: u16 = 0x2000;
 const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 
-pub struct Bus {
+pub struct BUS {
     cpu_vram: [u8; 2048],
-    rom: Rom,
+    rom: ROM,
 }
 
-impl Bus {
-    pub fn new(rom: Rom) -> Self {
-        Bus {
+impl BUS {
+    pub fn new(rom: ROM) -> Self {
+        BUS {
             cpu_vram: [0; 2048],
-            rom: rom,
+            rom,
         }
     }
 
@@ -56,7 +56,7 @@ impl Bus {
     }
 }
 
-impl Mem for Bus {
+impl Mem for BUS {
     fn mem_read(&self, addr: u16) -> u8 {
         match addr {
             RAM..=RAM_MIRRORS_END => {

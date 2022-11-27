@@ -1115,8 +1115,6 @@ impl CPU {
                     self.mem_write(mem_address, data)
                 }
 
-
-                _ => todo!(),
             }
 
             if program_counter_state == self.program_counter {

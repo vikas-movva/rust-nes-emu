@@ -2,6 +2,20 @@ use crate::bus::BUS;
 use crate::opcodes;
 use std::collections::HashMap;
 
+// CPU memory map:
+// from: https://www.nesdev.org/wiki/CPU_memory_map
+// | Address range | Size | Device                                                             |
+// |---------------|------|--------------------------------------------------------------------|
+// | $0000-$07FF   | 2 KB | 2KB internal RAM                                                   |
+// | $0800-$0FFF   | 2 KB |                                                                    |
+// | $1000-$17FF   | 2 KB | Mirrors of $0000-$07FF                                             |
+// | $1800-$1FFF   | 2 KB |                                                                    |
+// | $2000-$2007   | 8 B  | PPU registers                                                      |
+// | $2008-$3FFF   | 8 KB | Mirrors of $2000-2007                                              |
+// | $4000-$4017   | 24 B | APU and I/O registers                                              |
+// | $4018-$401F   | 8 B  | APU and I/O functionality (disabled). See CPU Test Mode.           |
+// | $4020-$FFFF   | 48 KB| Cartridge space: PRG ROM, PRG RAM, and mapper registers (See Note) |
+
 bitflags! {
     /// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
     ///

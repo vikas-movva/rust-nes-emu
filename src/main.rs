@@ -2,6 +2,7 @@ pub mod bus;
 pub mod rom;
 pub mod cpu;
 pub mod opcodes;
+pub mod ppu;
 
 use bus::BUS;
 use rom::ROM;

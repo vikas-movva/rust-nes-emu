@@ -10,21 +10,22 @@ A cycle-accurate NES emulator written in Rust, following the [Writing NES Emulat
 
 ## Features
 
-| Subsystem | Status |
-|-----------|--------|
-| **CPU (6502)** | ✅ All 151 official + unofficial opcodes; cycle-accurate `step()` |
-| **PPU** | ✅ Scanline timing (262×341), VBlank NMI, background + 8×8 sprite rendering, palette indexing |
-| **Mapper 0 (NROM)** | ✅ NROM-128 (16 KB mirrored) + NROM-256 (32 KB); CHR-ROM |
-| **Bus** | ✅ Full memory map: RAM, PPU regs ($2000–$2007), OAM DMA ($4014), joypad ($4016/$4017), APU stubs |
-| **Input** | ✅ Real NES joypad protocol (shift register at $4016/$4017) via SDL2 keyboard |
-| **ROM loading** | ✅ iNES v1 header parse; NES2.0 rejected |
-| **Tests** | ✅ 39 passing (CPU, PPU, Mapper, Bus, ROM) |
+| Subsystem           | Status                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| **CPU (6502)**      | ✅ All 151 official + unofficial opcodes; cycle-accurate `step()`                                 |
+| **PPU**             | ✅ Scanline timing (262×341), VBlank NMI, background + 8×8 sprite rendering, palette indexing     |
+| **Mapper 0 (NROM)** | ✅ NROM-128 (16 KB mirrored) + NROM-256 (32 KB); CHR-ROM                                          |
+| **Bus**             | ✅ Full memory map: RAM, PPU regs ($2000–$2007), OAM DMA ($4014), joypad ($4016/$4017), APU stubs |
+| **Input**           | ✅ Real NES joypad protocol (shift register at $4016/$4017) via SDL2 keyboard                     |
+| **ROM loading**     | ✅ iNES v1 header parse; NES2.0 rejected                                                          |
+| **Tests**           | ✅ 39 passing (CPU, PPU, Mapper, Bus, ROM)                                                        |
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
+
 - **Rust** 1.80+ (`rustup default stable`)
 - **SDL2** native library
   - macOS: `brew install sdl2`
@@ -32,21 +33,25 @@ A cycle-accurate NES emulator written in Rust, following the [Writing NES Emulat
   - Windows: `vcpkg install sdl2` or MSYS2 `pacman -S mingw-w64-x86_64-SDL2`
 
 ### Build & Test
+
 ```bash
 cargo test --release
 ```
 
 ### Run the bundled Snake ROM (legacy CPU-RAM scrape path)
+
 ```bash
 cargo run --release
 ```
 
 ### Run a real NES ROM (Mapper 0 / NROM)
+
 ```bash
 cargo run --release -- "path/to/game.nes"
 ```
 
 **Example (Super Mario Bros. — Mapper 0, NROM-128):**
+
 ```bash
 cargo run --release -- "Mario Bros. (World).nes"
 ```
@@ -55,17 +60,17 @@ cargo run --release -- "Mario Bros. (World).nes"
 
 ## Controls
 
-| Key | Joypad Button |
-|-----|---------------|
-| `J` / `Space` | A |
-| `K` / `LShift` | B |
-| `RShift` | Select |
-| `Enter` | Start |
-| `W` / `↑` | Up |
-| `S` / `↓` | Down |
-| `A` / `←` | Left |
-| `D` / `→` | Right |
-| `Esc` | Quit |
+| Key            | Joypad Button |
+| -------------- | ------------- |
+| `J` / `Space`  | A             |
+| `K` / `LShift` | B             |
+| `RShift`       | Select        |
+| `Enter`        | Start         |
+| `W` / `↑`      | Up            |
+| `S` / `↓`      | Down          |
+| `A` / `←`      | Left          |
+| `D` / `→`      | Right         |
+| `Esc`          | Quit          |
 
 ---
 
@@ -86,6 +91,7 @@ src/
 ```
 
 ### CPU ↔ PPU Timing
+
 - NTSC: 262 scanlines × 341 PPU dots per frame
 - CPU:PPU cycle ratio = 1:3
 - `CPU::step()` returns instruction cycles → `run_with_callback` calls `PPU::tick()` 3× per CPU cycle
@@ -93,6 +99,7 @@ src/
 - Frame buffer ready after scanline 239
 
 ### Mapper System
+
 ```rust
 pub trait Mapper: Send {
     fn read_prg(&self, addr: u16) -> u8;
@@ -102,6 +109,7 @@ pub trait Mapper: Send {
     fn mirroring(&self) -> Mirroring;
 }
 ```
+
 - `Nrom` implements Mapper 0 (NROM-128/256)
 - Ready for MMC1, UxROM, CNROM, MMC3, etc.
 
@@ -109,17 +117,18 @@ pub trait Mapper: Send {
 
 ## Tested ROMs
 
-| ROM | Mapper | PRG | CHR | Status |
-|-----|--------|-----|-----|--------|
-| `snake.nes` | 0 (test ROM) | 32 KB | 0 KB | ✅ Legacy CPU-RAM scrape |
-| `Mario Bros. (World).nes` | 0 (NROM-128) | 16 KB | 8 KB | ✅ Full PPU rendering |
-| `nestest.nes` | 0 (NROM-256) | 32 KB | 8 KB | ✅ Boots (CI target) |
+| ROM                       | Mapper       | PRG   | CHR  | Status                   |
+| ------------------------- | ------------ | ----- | ---- | ------------------------ |
+| `snake.nes`               | 0 (test ROM) | 32 KB | 0 KB | ✅ Legacy CPU-RAM scrape |
+| `Mario Bros. (World).nes` | 0 (NROM-128) | 16 KB | 8 KB | ✅ Full PPU rendering    |
+| `nestest.nes`             | 0 (NROM-256) | 32 KB | 8 KB | ✅ All tests pass        |
 
 ---
 
 ## Roadmap
 
 **Next milestones:**
+
 1. MMC1 (Mapper 1) — Zelda, Metroid, Mega Man 2
 2. UxROM (Mapper 2) — Castlevania, Contra
 3. CNROM (Mapper 3) — Arkanoid

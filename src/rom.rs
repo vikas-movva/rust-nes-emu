@@ -2,7 +2,7 @@ const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 const PRG_ROM_PAGE_SIZE: usize = 16384;
 const CHR_ROM_PAGE_SIZE: usize = 8192;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[allow(non_camel_case_types)]
 pub enum Mirroring {
     VERTICAL,
@@ -87,7 +87,7 @@ pub mod test {
     pub fn test_rom() -> ROM {
         let test_rom = create_rom(TestRom {
             header: vec![
-                0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x31, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+                0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x01, 00, 00, 00, 00, 00, 00, 00, 00, 00,
             ],
             trainer: None,
             pgp_rom: vec![1; 2 * PRG_ROM_PAGE_SIZE],
@@ -101,7 +101,7 @@ pub mod test {
     fn test() {
         let test_rom = create_rom(TestRom {
             header: vec![
-                0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x31, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+                0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x01, 00, 00, 00, 00, 00, 00, 00, 00, 00,
             ],
             trainer: None,
             pgp_rom: vec![1; 2 * PRG_ROM_PAGE_SIZE],
@@ -112,7 +112,7 @@ pub mod test {
 
         assert_eq!(rom.chr_rom, vec!(2; 1 * CHR_ROM_PAGE_SIZE));
         assert_eq!(rom.prg_rom, vec!(1; 2 * PRG_ROM_PAGE_SIZE));
-        assert_eq!(rom.mapper, 3);
+        assert_eq!(rom.mapper, 0);
         assert_eq!(rom.screen_mirroring, Mirroring::VERTICAL);
     }
 
@@ -126,7 +126,7 @@ pub mod test {
                 0x1A,
                 0x02,
                 0x01,
-                0x31 | 0b100,
+                0x01 | 0b100,
                 00,
                 00,
                 00,
@@ -146,7 +146,7 @@ pub mod test {
 
         assert_eq!(rom.chr_rom, vec!(2; 1 * CHR_ROM_PAGE_SIZE));
         assert_eq!(rom.prg_rom, vec!(1; 2 * PRG_ROM_PAGE_SIZE));
-        assert_eq!(rom.mapper, 3);
+        assert_eq!(rom.mapper, 0);
         assert_eq!(rom.screen_mirroring, Mirroring::VERTICAL);
     }
 

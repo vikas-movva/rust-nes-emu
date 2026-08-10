@@ -27,4 +27,19 @@ impl ScrollRegister{
         self.latch = false;
     }
     
+    pub fn fine_x(&self) -> u8 {
+        self.scroll_x & 0x07
+    }
+    
+    pub fn coarse_x(&self) -> u8 {
+        self.scroll_x >> 3
+    }
+    
+    pub fn fine_y(&self) -> u8 {
+        self.scroll_y & 0x07
+    }
+    
+    pub fn coarse_y(&self) -> u8 {
+        self.scroll_y >> 3
+    }
 }

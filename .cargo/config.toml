@@ -1,0 +1,5 @@
+[build]
+rustflags = ["-L", "/opt/homebrew/lib"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-L", "/opt/homebrew/lib"]

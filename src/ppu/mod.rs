@@ -10,6 +10,8 @@ use registers::address::AddressRegister;
 
 pub struct PPU{
     chr_rom: Vec<u8>,
+    // CHR-RAM (8 KB) used when chr_rom is empty
+    chr_ram: [u8; 0x2000],
     pub mirroring: Mirroring,
     pub control: ControlRegister,
     pub mask: MaskRegister,
@@ -23,6 +25,20 @@ pub struct PPU{
     pub palette_table: [u8; 0x20],
     
     internal_buffer: u8,
+
+    // Scanline-based timing. One NTSC frame is 262 scanlines × 341 dots.
+    // scanline: 0–239 visible, 240 post-render, 241–260 vblank, 261 pre-render.
+    // We track `cycle` modulo 341 and `scanline` modulo 262.
+    scanline: u16,
+    cycle: u16,
+    // True for exactly one tick when VBlank becomes active and NMI is armed.
+    nmi_pending: bool,
+
+    // Frame buffer: 256 x 240 pixels, stored as palette indices (0-63).
+    // Updated once per frame after scanline 239.
+    frame: [u8; 256 * 240],
+    // True when a new frame is ready.
+    frame_ready: bool,
 }
 
 pub trait PPUInterface{
@@ -54,6 +70,22 @@ impl PPU{
             oam_addr: 0,
             palette_table: [0; 0x20],
             internal_buffer: 0,
+            scanline: 0,
+            cycle: 0,
+            nmi_pending: false,
+            frame: [0; 256 * 240],
+            frame_ready: false,
+            chr_ram: [0; 0x2000],
+        }
+    }
+
+    /// Read a byte from CHR space (0x0000–0x1FFF). Uses CHR-ROM if present,
+    /// otherwise falls back to CHR-RAM.
+    fn read_chr(&self, addr: u16) -> u8 {
+        if !self.chr_rom.is_empty() {
+            self.chr_rom[addr as usize]
+        } else {
+            self.chr_ram[addr as usize]
         }
     }
 
@@ -88,12 +120,217 @@ impl PPU{
         self.address.increment(increment);
     }
 
+    // ── Timing ──────────────────────────────────────────────────────────
+    // NTSC PPU: 262 scanlines per frame, 341 dots per scanline.
+    //   Lines  0–239:  visible rendering
+    //   Line   240:    post-render (idle)
+    //   Lines 241–260: vertical blanking
+    //   Line  261:     pre-render (idle)
+    //
+    // VBlank flag is set at the start of scanline 241 (dot 1) and cleared at
+    // the start of the pre-render line (dot 1). NMI fires on the same edge if
+    // the control register's generate-NMI bit is set.
+    /// Advance the PPU by one dot. Returns `true` if an NMI should be
+    /// delivered to the CPU on this tick.
+    pub fn tick(&mut self) -> bool {
+        self.nmi_pending = false;
+
+        // Advance dot counter first.
+        self.cycle += 1;
+        if self.cycle == 341 {
+            // End of scanline — render if visible
+            if self.scanline < 240 {
+                self.render_scanline();
+            }
+            if self.scanline == 239 {
+                self.end_of_frame();
+            }
+
+            self.cycle = 0;
+            self.scanline = (self.scanline + 1) % 262;
+        }
+
+        // Rising edge entering scanline 241 at dot 1 → set VBlank
+        if self.scanline == 241 && self.cycle == 1 {
+            self.status.set_vblank_status(true);
+            if self.control.generate_nmi() {
+                self.nmi_pending = true;
+            }
+        }
+
+        // Rising edge entering pre-render (line 261) at dot 1 → clear VBlank
+        if self.scanline == 261 && self.cycle == 1 {
+            self.status.set_vblank_status(false);
+            // also clear sprite-zero-hit and sprite overflow per spec
+            self.status.set_sprite_zero_hit(false);
+            self.status.set_sprite_overflow(false);
+        }
+
+        self.nmi_pending
+    }
+
+    /// Convenience: advance N PPU dots.
+    pub fn tick_n(&mut self, n: u32) -> bool {
+        let mut nmi = false;
+        for _ in 0..n {
+            if self.tick() {
+                nmi = true;
+            }
+        }
+        nmi
+    }
+
+    pub fn scanline(&self) -> u16 { self.scanline }
+    pub fn cycle(&self) -> u16 { self.cycle }
+
+    /// Returns a reference to the current frame buffer (256×240 palette indices).
+    /// Call this after `frame_ready()` returns `true`.
+    pub fn frame(&self) -> &[u8] {
+        &self.frame
+    }
+
+    /// Returns `true` if a new frame has been rendered since last call.
+    pub fn frame_ready(&self) -> bool {
+        self.frame_ready
+    }
+
+    /// Clears the `frame_ready` flag (call after consuming the frame).
+    pub fn reset_frame_ready(&mut self) {
+        self.frame_ready = false;
+    }
+
+    // ── Rendering ─────────────────────────────────────────────────────────
+    // Called at the end of each visible scanline (0–239) to render one line
+    // of background + sprites. Uses a simplified scanline-accurate approach:
+    // for each of the 256 pixels on the scanline, we fetch the background
+    // tile and sprite pixels and apply priority.
+    fn render_scanline(&mut self) {
+        let scanline = self.scanline as usize;
+        if scanline >= 240 {
+            return;
+        }
+
+        // Extract scroll from PPU registers
+        let fine_y = self.scroll.fine_y() as usize;
+        let coarse_y = self.scroll.coarse_y() as usize;
+        let _coarse_x = self.scroll.coarse_x() as usize;
+        let fine_x = self.scroll.fine_x() as usize;
+
+        // Nametable base from control register
+        let nt_base = self.control.nametable_addr();
+
+        // Background pattern table base
+        let bg_pt = self.control.background_pattern_addr();
+
+        // Sprite pattern table base (8x8 mode for now)
+        let spr_pt = self.control.sprite_pattern_addr();
+
+        // For each of 256 pixels on this scanline
+        for x in 0..256 {
+            // ── Background ─────────────────────────────────────────────
+            // Effective X coordinate in the nametable (with fine X scroll)
+            let eff_x = (x + fine_x) % 256;
+            let tile_x = eff_x / 8;
+            let pixel_x = eff_x % 8;
+
+            // Effective Y coordinate (with coarse/fine Y scroll)
+            let eff_y = (scanline + fine_y + coarse_y * 8) % 240;
+            let tile_y = eff_y / 8;
+            let pixel_y = eff_y % 8;
+
+            // Determine which nametable (horizontal/vertical mirroring handled by mirror_vram_address)
+            let nt_addr = nt_base + (tile_y * 32 + tile_x) as u16;
+            let tile_idx = self.vram[self.mirror_vram_address(nt_addr) as usize] as u16;
+
+            // Fetch pattern bits for this scanline row of the tile
+            // Pattern table: each tile = 16 bytes (8 low bits, 8 high bits)
+            let pt_addr = bg_pt + tile_idx * 16 + pixel_y as u16;
+            let low_bit = (self.read_chr(pt_addr) >> (7 - pixel_x)) & 1;
+            let high_bit = (self.read_chr(pt_addr + 8) >> (7 - pixel_x)) & 1;
+            let bg_palette_idx = (high_bit << 1) | low_bit; // 0–3
+
+            // Attribute table: each byte covers 4x4 tiles, 2 bits per tile
+            // Attribute offset within $23C0–$23FF (relative to nametable base)
+            let at_tile_x = (tile_x / 4) as u16;
+            let at_tile_y = (tile_y / 4) as u16;
+            let at_addr = nt_base + 0x3C0 + at_tile_y * 8 + at_tile_x;
+            let at_byte = self.vram[self.mirror_vram_address(at_addr) as usize];
+            // Shift to get the 2 bits for this tile
+            let at_shift = ((at_tile_y % 2) * 4 + (at_tile_x % 2) * 2) as u8;
+            let at_bits = (at_byte >> at_shift) & 0b11;
+            let bg_palette = (at_bits << 2) | bg_palette_idx; // 0–15 (index into palette RAM)
+
+            // Read palette color from $3F00 + bg_palette
+            let bg_color = self.palette_table[bg_palette as usize];
+
+            // ── Sprites ───────────────────────────────────────────────
+            // OAM: 64 sprites × 4 bytes = 256 bytes
+            // Each sprite: Y, Tile, Attributes, X
+            // We use the "front-to-back" priority: first sprite in OAM wins
+            let mut sprite_color = 0;
+            let mut sprite_priority = false; // true = behind background
+            let mut sprite_zero_hit = false;
+
+            for i in 0..64 {
+                let base = i * 4;
+                let spr_y = self.oam_data[base] as usize;
+                let spr_tile = self.oam_data[base + 1] as u16;
+                let spr_attr = self.oam_data[base + 2];
+                let spr_x = self.oam_data[base + 3] as usize;
+
+                // Check if sprite is on this scanline (8x8 sprites for now)
+                if scanline >= spr_y && scanline < spr_y + 8 {
+                    let row = scanline - spr_y;
+                    let flip_v = (spr_attr & 0x80) != 0;
+                    let flip_h = (spr_attr & 0x40) != 0;
+                    sprite_priority = (spr_attr & 0x20) != 0; // behind background
+                    let spr_palette = spr_attr & 0x03;
+
+                    let py = if flip_v { 7 - row } else { row };
+                    let pt_addr = spr_pt + spr_tile * 16 + py as u16;
+                    // Actually we need to account for pixel_x within the sprite
+                    // For simplicity, we check if this pixel x overlaps the sprite
+                    if x >= spr_x && x < spr_x + 8 {
+                        let px = x - spr_x;
+                        let px = if flip_h { 7 - px } else { px };
+                        let low = (self.read_chr(pt_addr) >> (7 - px)) & 1;
+                        let high = (self.read_chr(pt_addr + 8) >> (7 - px)) & 1;
+                        let sp_idx = (high << 1) | low;
+                        if sp_idx != 0 {
+                            // Sprite palette: $3F10 + spr_palette*4 + sp_idx
+                            sprite_color = self.palette_table[0x10 + spr_palette as usize * 4 + sp_idx as usize];
+                            sprite_zero_hit = i == 0;
+                            break; // first opaque sprite wins
+                        }
+                    }
+                }
+            }
+
+            // ── Priority ──────────────────────────────────────────────
+            let final_color = if sprite_color != 0 && (!sprite_priority || bg_palette_idx == 0) {
+                // Sprite is opaque and either in front of BG or BG is transparent
+                if sprite_zero_hit && bg_palette_idx != 0 && x < 255 {
+                    self.status.set_sprite_zero_hit(true);
+                }
+                sprite_color
+            } else {
+                bg_color
+            };
+
+            self.frame[scanline * 256 + x] = final_color;
+        }
+    }
+
+    /// Called at the end of a frame (scanline 239) to mark frame ready.
+    fn end_of_frame(&mut self) {
+        self.frame_ready = true;
+    }
 }
 
 impl PPUInterface for PPU{
 
     fn write_to_control(&mut self, value: u8) {
-        let before_nmi_status = self.control.generate_nmi();
+        let _before_nmi_status = self.control.generate_nmi();
         self.control.update(value);
     }
 
@@ -164,7 +401,7 @@ impl PPUInterface for PPU{
         match addr {
             0..=0x1fff => {
                 let result = self.internal_buffer;
-                self.internal_buffer = self.chr_rom[addr as usize];
+                self.internal_buffer = self.read_chr(addr);
                 result
             }
             0x2000..=0x2fff => {
@@ -378,23 +615,117 @@ pub mod test {
     }
 
     #[test]
-    fn test_oam_dma() {
-        let mut ppu = PPU::new_empty_rom();
+        fn test_oam_dma() {
+            let mut ppu = PPU::new_empty_rom();
 
-        let mut data = [0x66; 256];
-        data[0] = 0x77;
-        data[255] = 0x88;
+            let mut data = [0x66; 256];
+            data[0] = 0x77;
+            data[255] = 0x88;
 
-        ppu.write_to_oam_addr(0x10);
-        ppu.write_to_oam_dma(&data);
+            ppu.write_to_oam_addr(0x10);
+            ppu.write_to_oam_dma(&data);
 
-        ppu.write_to_oam_addr(0xf); //wrap around
-        assert_eq!(ppu.read_from_oam_data(), 0x88);
+            ppu.write_to_oam_addr(0xf); //wrap around
+            assert_eq!(ppu.read_from_oam_data(), 0x88);
 
-        ppu.write_to_oam_addr(0x10);
-        assert_eq!(ppu.read_from_oam_data(), 0x77);
-  
-        ppu.write_to_oam_addr(0x11);
-        assert_eq!(ppu.read_from_oam_data(), 0x66);
+            ppu.write_to_oam_addr(0x10);
+            assert_eq!(ppu.read_from_oam_data(), 0x77);
+
+            ppu.write_to_oam_addr(0x11);
+            assert_eq!(ppu.read_from_oam_data(), 0x66);
+        }
+
+        #[test]
+            fn test_vblank_flag_set_at_scanline_241() {
+                let mut ppu = PPU::new_empty_rom();
+                // Fast-forward to scanline 240, cycle 340 (one tick before VBlank trigger)
+                for _ in 0..240 {
+                    ppu.tick_n(341);
+                }
+                ppu.tick_n(340); // scanline 240, cycle 340
+
+                // Next tick → scanline 241, cycle 0 (no VBlank yet)
+                ppu.tick();
+                assert!(!ppu.status.is_in_vblank());
+
+                // Next tick → scanline 241, cycle 1 (VBlank set!)
+                let nmi = ppu.tick();
+                assert!(ppu.status.is_in_vblank());
+                assert!(!nmi); // NMI not armed by default
+            }
+
+            #[test]
+            fn test_vblank_flag_cleared_at_pre_render() {
+                let mut ppu = PPU::new_empty_rom();
+                // Fast-forward to scanline 260, cycle 340
+                for _ in 0..260 {
+                    ppu.tick_n(341);
+                }
+                ppu.tick_n(340);
+
+                // VBlank should be active
+                assert!(ppu.status.is_in_vblank());
+
+                // Next tick → scanline 261, cycle 0 (still in VBlank)
+                ppu.tick();
+                assert!(ppu.status.is_in_vblank());
+
+                // Next tick → scanline 261, cycle 1 (VBlank cleared!)
+                ppu.tick();
+                assert!(!ppu.status.is_in_vblank());
+            }
+
+            #[test]
+            fn test_nmi_fires_when_generate_nmi_set() {
+                let mut ppu = PPU::new_empty_rom();
+                // Enable NMI
+                ppu.write_to_control(0x80); // GENERATE_NMI = 1
+
+                // Fast-forward to scanline 240, cycle 340
+                for _ in 0..240 {
+                    ppu.tick_n(341);
+                }
+                ppu.tick_n(340);
+
+                // Advance two ticks to hit VBlank at scanline 241, cycle 1
+                ppu.tick(); // scanline 241, cycle 0
+                let nmi = ppu.tick(); // scanline 241, cycle 1 → NMI!
+                assert!(ppu.status.is_in_vblank());
+                assert!(nmi);
+            }
+
+            #[test]
+            fn test_no_nmi_when_generate_nmi_clear() {
+                let mut ppu = PPU::new_empty_rom();
+                ppu.write_to_control(0x00); // GENERATE_NMI = 0
+
+                for _ in 0..240 {
+                    ppu.tick_n(341);
+                }
+                ppu.tick_n(340);
+
+                ppu.tick(); // scanline 241, cycle 0
+                let nmi = ppu.tick(); // scanline 241, cycle 1
+                assert!(ppu.status.is_in_vblank());
+                assert!(!nmi); // NMI disabled
+            }
+
+            #[test]
+            fn test_tick_n_returns_nmi_if_any() {
+                let mut ppu = PPU::new_empty_rom();
+                ppu.write_to_control(0x80);
+
+                // Fast-forward to scanline 240, cycle 339
+                for _ in 0..240 {
+                    ppu.tick_n(341);
+                }
+                ppu.tick_n(339);
+
+                // Next 3 ticks: 
+                //  1: scanline 240, cycle 340 (no NMI)
+                //  2: scanline 241, cycle 0 (no NMI)
+                //  3: scanline 241, cycle 1 (NMI!)
+                let nmi = ppu.tick_n(3);
+                assert!(nmi);
+            }
     }
-}

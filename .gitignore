@@ -1,2 +1,7 @@
 /target
 rust-nes-emu.code-workspace
+Mario Bros. (World).nes
+.hermes
+*.nes
+/docs/*.md
+IDEA.md

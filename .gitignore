@@ -5,3 +5,4 @@ Mario Bros. (World).nes
 *.nes
 /docs/*.md
 IDEA.md
+.DS_Store

@@ -33,22 +33,22 @@ A cycle-accurate NES emulator written in Rust, following the [Writing NES Emulat
 
 ### Build & Test
 ```bash
-cargo test
+cargo test --release
 ```
 
 ### Run the bundled Snake ROM (legacy CPU-RAM scrape path)
 ```bash
-cargo run
+cargo run --release
 ```
 
 ### Run a real NES ROM (Mapper 0 / NROM)
 ```bash
-cargo run -- "path/to/game.nes"
+cargo run --release -- "path/to/game.nes"
 ```
 
 **Example (Super Mario Bros. — Mapper 0, NROM-128):**
 ```bash
-cargo run -- "Mario Bros. (World).nes"
+cargo run --release -- "Mario Bros. (World).nes"
 ```
 
 ---
@@ -119,8 +119,6 @@ pub trait Mapper: Send {
 
 ## Roadmap
 
-See [`docs/PROGRESS.md`](docs/PROGRESS.md) for detailed progress and open issues.
-
 **Next milestones:**
 1. MMC1 (Mapper 1) — Zelda, Metroid, Mega Man 2
 2. UxROM (Mapper 2) — Castlevania, Contra
@@ -135,18 +133,20 @@ See [`docs/PROGRESS.md`](docs/PROGRESS.md) for detailed progress and open issues
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE) (add one if you want).
+MIT — [`LICENSE`](LICENSE)
 
 ---
 
 ## Credits
 
-- [bugzmanov — Writing NES Emulator in Rust](https://bugzmanov.github.io/nes_ebook/) — primary reference
-- [NESDev Wiki](https://www.nesdev.org/wiki/) — definitive hardware documentation
+- [bugzmanov — Writing NES Emulator in Rust](https://bugzmanov.github.io/nes_ebook/) - Huge thanks to bugzamov for breaking down NES development!
+- [NESDev Wiki](https://www.nesdev.org/wiki/)
 - [6502 Opcode Reference](https://www.masswerk.at/6502/6502_instruction_set.html)
 
 ---
 
 ## Screenshots
 
-*(Add screenshots after running `cargo run -- "Mario Bros. (World).nes"`)*
+From Super Mario Bros:
+![Screenshot 1](<screenshots/Screenshot 2026-08-10 at 12.59.20 PM.png>)
+![Screenshot 2](<screenshots/Screenshot 2026-08-10 at 12.59.44 PM.png>)
